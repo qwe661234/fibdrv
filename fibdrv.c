@@ -22,30 +22,110 @@ MODULE_VERSION("0.1");
 /* MAX_LENGTH is set to 92 because
  * ssize_t can't fit the number > 92
  */
-#define MAX_LENGTH 100
+#define MAX_LENGTH 92
 
 static dev_t fib_dev = 0;
 static struct cdev *fib_cdev;
 static struct class *fib_class;
 static DEFINE_MUTEX(fib_mutex);
 
-static long long fib_sequence(long long k, char *buf)
+// static long long fib_sequence_string(long long k, char *buf)
+// {
+//     /* FIXME: C99 variable-length array (VLA) is not allowed in Linux kernel.
+//     */ str_t *f = kmalloc((k + 2) * sizeof(str_t), GFP_KERNEL);
+
+//     strncpy(f[0].numberStr, "0", 1);
+//     f[0].numberStr[1] = '\0';
+//     strncpy(f[1].numberStr, "1", 1);
+//     f[1].numberStr[1] = '\0';
+
+//     for (int i = 2; i <= k; i++) {
+//         add_str(f[i - 1].numberStr, f[i - 2].numberStr, f[i].numberStr);
+//     }
+//     size_t retSize = strlen(f[k].numberStr);
+//     reverse_str(f[k].numberStr, retSize);
+//     __copy_to_user(buf, f[k].numberStr, retSize);
+//     return retSize;
+// }
+
+// static long long fib_sequence_recursive(long long k)
+// {
+//     /* FIXME: C99 variable-length array (VLA) is not allowed in Linux kernel.
+//     */ long long *f = kmalloc((k + 2) * sizeof(long long), GFP_KERNEL);
+
+//     f[0] = 0;
+//     f[1] = 1;
+
+//     for (int i = 2; i <= k; i++) {
+//         f[i] = f[i - 1] + f[i - 2];
+//     }
+
+//     return f[k];
+// }
+
+// static long long fib_helper(long long n, long long *f)
+// {
+//     if (n <= 2)
+//         return n ? (f[n] = 1) : (f[n] = 0);
+//     else if (f[n])
+//         return f[n];
+
+//     uint32_t k = n / 2;
+//     long long a = fib_helper(k, f);
+//     long long b = fib_helper(k + 1, f);
+
+//     return (f[n] = (n % 2) ? a * a + b * b : a * (2 * b - a));
+// }
+
+// static long long fib_sequence_fast_doubling_recursive(long long k)
+// {
+//     /* FIXME: C99 variable-length array (VLA) is not allowed in Linux kernel.
+//     */ long long *f = kmalloc((k + 2) * sizeof(long long), GFP_KERNEL);
+//     // becasue 4 never shows in Fibonacci sequence
+//     memset(f, 0, (k + 2) * sizeof(long long));
+//     fib_helper(k, f);
+//     return f[k];
+// }
+
+// static long long fib_sequence_fast_doubling_iterative(long long k)
+// {
+//     uint8_t bits = 0;
+//     for (uint32_t i = k; i; ++bits, i >>= 1)
+//         ;
+
+//     long long a = 0;
+//     long long b = 1;
+//     for (uint32_t mask = 1 << (bits - 1); mask; mask >>= 1) {
+//         long long c = a * (2 * b - a);
+//         long long d = a * a + b * b;
+//         if (mask & k) {
+//             a = d;
+//             b = c + d;
+//         } else {
+//             a = c;
+//             b = d;
+//         }
+//     }
+//     return a;
+// }
+
+static long long fib_sequence_fast_doubling_iterative_clz(long long k)
 {
-    /* FIXME: C99 variable-length array (VLA) is not allowed in Linux kernel. */
-    str_t *f = kmalloc((k + 2) * sizeof(str_t), GFP_KERNEL);
-
-    strncpy(f[0].numberStr, "0", 1);
-    f[0].numberStr[1] = '\0';
-    strncpy(f[1].numberStr, "1", 1);
-    f[1].numberStr[1] = '\0';
-
-    for (int i = 2; i <= k; i++) {
-        add_str(f[i - 1].numberStr, f[i - 2].numberStr, f[i].numberStr);
+    uint8_t h = 63 - __builtin_clzll(k);
+    long long a = 0;
+    long long b = 1;
+    for (uint32_t mask = 1 << h; mask; mask >>= 1) {
+        long long c = a * (2 * b - a);
+        long long d = a * a + b * b;
+        if (mask & k) {
+            a = d;
+            b = c + d;
+        } else {
+            a = c;
+            b = d;
+        }
     }
-    size_t retSize = strlen(f[k].numberStr);
-    reverse_str(f[k].numberStr, retSize);
-    __copy_to_user(buf, f[k].numberStr, retSize);
-    return retSize;
+    return a;
 }
 
 static int fib_open(struct inode *inode, struct file *file)
@@ -69,7 +149,7 @@ static ssize_t fib_read(struct file *file,
                         size_t size,
                         loff_t *offset)
 {
-    return (ssize_t) fib_sequence(*offset, buf);
+    return (ssize_t) fib_sequence_fast_doubling_iterative_clz(*offset);
 }
 
 /* write operation is skipped */
