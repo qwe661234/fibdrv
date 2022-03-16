@@ -17,8 +17,6 @@ static inline long long get_nanotime()
 
 int main()
 {
-    long long sz, ktime;
-
     char read_buf[] = "";
     char write_buf[] = "testing writing";
     int offset = 92; /* TODO: try test something bigger than the limit */
@@ -31,18 +29,14 @@ int main()
         exit(1);
     }
 
-    // for (int i = 0; i <= offset; i++) {
-    //     sz = write(fd, write_buf, strlen(write_buf));
-    //     printf("Writing to " FIB_DEV ", returned the sequence %lld\n", sz);
-    // }
     write(fd, write_buf, strlen(write_buf));
     for (int i = 0; i <= offset; i++) {
         lseek(fd, i, SEEK_SET);
         long long start = get_nanotime();
-        sz = read(fd, read_buf, 1);
+        long long sz = read(fd, read_buf, 1);
         read_buf[sz] = '\0';
         long long utime = get_nanotime() - start;
-        ktime = write(fd, write_buf, strlen(write_buf));
+        long long ktime = write(fd, write_buf, strlen(write_buf));
         fprintf(data, "%d %lld %lld %lld\n", i, ktime, utime, utime - ktime);
         printf("Reading from " FIB_DEV
                " at offset %d, returned the sequence "
@@ -50,18 +44,6 @@ int main()
                i, read_buf);
         printf("Writing to " FIB_DEV ", returned the sequence %lld\n", ktime);
     }
-
-    // for (int i = offset; i >= 0; i--) {
-    //     lseek(fd, i, SEEK_SET);
-    //     long long start = get_nanotime();
-    //     sz = read(fd, read_buf, 1);
-    //     read_buf[sz] = '\0';
-    //     long long utime = get_nanotime() - start;
-    //     printf("Reading from " FIB_DEV
-    //            " at offset %d, returned the sequence "
-    //            "%s.\n",
-    //            i, read_buf);
-    // }
 
     close(fd);
     fclose(data);
