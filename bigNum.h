@@ -28,19 +28,26 @@ void bigNum_init(bigNum_t *n, int num)
     n->digits[0] = num % base;
 };
 
-void bigNum_to_dec(bigNum_t *n)
+char *bigNum_to_dec(bigNum_t *n)
 {
-    printk("%u", n->digits[n->len - 1]);
+    char *ret = kmalloc(n->len * 9 * sizeof(char), GFP_KERNEL);
+    char *q = ret;
+    int buf_size = n->len * 9;
+    snprintf(q, buf_size, "%u", n->digits[n->len - 1]);
+    while (*q)
+        q++;
     for (int i = n->len - 2; i >= 0; i--) {
-        printk("%09u", n->digits[i]);
+        snprintf(q, buf_size, "%09u", n->digits[i]);
+        q += 9;
     }
-    printk("\n");
+    *q = '\0';
+    return ret;
 };
 
 void bigNum_add(bigNum_t *a, bigNum_t *b, bigNum_t *c)
 {
     uint8_t carry = 0;
-    uint64_t sum = 0;
+    uint64_t sum;
     if (a->len >= b->len) {
         c->len = a->len;
         for (int i = 0; i < b->len; i++) {
@@ -72,66 +79,72 @@ void bigNum_add(bigNum_t *a, bigNum_t *b, bigNum_t *c)
     }
 };
 
-// void bigNum_substract(bigNum_t *a, bigNum_t *b, bigNum_t *c)
-// {
-//     c->len = a->len;
-//     for (int i = 0; i < a->len; i++) {
-//         if (a->digits[i] < b->digits[i]) {
-//             a->digits[i + 1]--;
-//             a->digits[i] += base;
-//         }
-//         c->digits[i] = a->digits[i] - b->digits[i];
-//     }
-//     if (!a->digits[a->len - 1])
-//         c->len--;
-// };
+void bigNum_substract(bigNum_t *a, bigNum_t *b, bigNum_t *c)
+{
+    c->len = a->len;
+    for (int i = 0; i < a->len; i++) {
+        if (a->digits[i] < b->digits[i]) {
+            a->digits[i + 1]--;
+            a->digits[i] += base;
+        }
+        c->digits[i] = a->digits[i] - b->digits[i];
+    }
+    if (!a->digits[a->len - 1])
+        c->len--;
+};
 
-// void bigNum_mul(bigNum_t *a, bigNum_t *b, bigNum_t *c)
-// {
-//     uint64_t carry = 0, sum = 0;
-//     c->len = b->len + a->len;
-//     for (int i = 0; i < b->len; i++) {
-//         for (int j = 0; j < a->len; j++) {
-//             sum = (uint64_t) b->digits[i] * a->digits[j] + carry +
-//                   c->digits[j + i];
-//             carry = sum / base;
-//             c->digits[j + i] = sum % base;
-//         }
-//         if (carry) {
-//             c->digits[i + a->len] = carry;
-//             carry = 0;
-//         }
-//     }
-//     if (!c->digits[c->len - 1])
-//         c->len--;
-// }
+void bigNum_mul(bigNum_t *a, bigNum_t *b, bigNum_t *c)
+{
+    uint64_t carry = 0, sum;
+    c->len = b->len + a->len;
+    for (int i = 0; i < b->len; i++) {
+        for (int j = 0; j < a->len; j++) {
+            sum = (uint64_t) b->digits[i] * a->digits[j] + carry +
+                  c->digits[j + i];
+            carry = sum / base;
+            c->digits[j + i] = sum % base;
+        }
+        if (carry) {
+            c->digits[i + a->len] = carry;
+            carry = 0;
+        }
+    }
+    if (!c->digits[c->len - 1])
+        c->len--;
+}
 
-// void bigNum_rshift(bigNum_t *a)
-// {
-//     uint8_t carry = 0, tmp;
-//     for (int i = a->len - 1; i >= 0; i--) {
-//         tmp = a->digits[i] & 1;
-//         a->digits[i] >>= 1;
-//         if (carry)
-//             a->digits[i] += base >> 1;
-//         carry = tmp;
-//     }
-//     if (!a->digits[a->len - 1] && a->len > 1)
-//         a->len--;
-// };
+void bigNum_rshift(bigNum_t *a)
+{
+    uint8_t carry = 0;
+    for (int i = a->len - 1; i >= 0; i--) {
+        uint8_t tmp = a->digits[i] & 1;
+        a->digits[i] >>= 1;
+        if (carry)
+            a->digits[i] += base >> 1;
+        carry = tmp;
+    }
+    if (!a->digits[a->len - 1] && a->len > 1)
+        a->len--;
+};
 
-// void bigNum_lshift(bigNum_t *a, bigNum_t *b)
-// {
-//     uint8_t carry = 0;
-//     uint32_t sum = 0;
-//     b->len = a->len;
-//     for (int i = 0; i < b->len; i++) {
-//         sum = a->digits[i] * 2 + carry;
-//         carry = sum / base;
-//         b->digits[i] = sum % base;
-//     }
-//     if (carry) {
-//         b->digits[b->len] = carry;
-//         b->len++;
-//     }
-// };
+void bigNum_lshift(bigNum_t *a, bigNum_t *b)
+{
+    uint8_t carry = 0;
+    b->len = a->len;
+    for (int i = 0; i < b->len; i++) {
+        uint32_t sum = a->digits[i] * 2 + carry;
+        carry = sum / base;
+        b->digits[i] = sum % base;
+    }
+    if (carry) {
+        b->digits[b->len] = carry;
+        b->len++;
+    }
+};
+
+void bigNum_clean(bigNum_t *a)
+{
+    for (int i = 0; i < a->len; i++)
+        a->digits[i] = 0;
+    a->len = 1;
+};

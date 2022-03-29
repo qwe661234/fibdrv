@@ -33,26 +33,27 @@ static struct class *fib_class;
 static DEFINE_MUTEX(fib_mutex);
 static ktime_t kt;
 
-// static long long fib_sequence(long long k, char *buf)
-// {
-//     /* FIXME: C99 variable-length array (VLA) is not allowed in Linux kernel.
-//     */ str_t *f = kmalloc((k + 2) * sizeof(str_t), GFP_KERNEL);
+static long long fib_sequence_string(long long k, char *buf)
+{
+    /* FIXME: C99 variable-length array (VLA) is not allowed in Linux kernel.
+     */
+    str_t *f = kmalloc((k + 2) * sizeof(str_t), GFP_KERNEL);
 
-//     strncpy(f[0].numberStr, "0", 1);
-//     f[0].numberStr[1] = '\0';
-//     strncpy(f[1].numberStr, "1", 1);
-//     f[1].numberStr[1] = '\0';
+    strncpy(f[0].numberStr, "0", 1);
+    f[0].numberStr[1] = '\0';
+    strncpy(f[1].numberStr, "1", 1);
+    f[1].numberStr[1] = '\0';
 
-//     for (int i = 2; i <= k; i++) {
-//         add_str(f[i - 1].numberStr, f[i - 2].numberStr, f[i].numberStr);
-//     }
-//     size_t retSize = strlen(f[k].numberStr);
-//     reverse_str(f[k].numberStr, retSize);
-//     __copy_to_user(buf, f[k].numberStr, retSize);
-//     return retSize;
-// }
+    for (int i = 2; i <= k; i++) {
+        add_str(f[i - 1].numberStr, f[i - 2].numberStr, f[i].numberStr);
+    }
+    size_t retSize = strlen(f[k].numberStr);
+    reverse_str(f[k].numberStr, retSize);
+    __copy_to_user(buf, f[k].numberStr, retSize);
+    return retSize;
+}
 
-static long long fib_sequence(long long k)
+static long long fib_sequence(long long k, char *buf)
 {
     bigNum_t *fib = kmalloc((k + 2) * sizeof(bigNum_t), GFP_KERNEL);
     bigNum_init(&fib[0], 0);
@@ -61,82 +62,138 @@ static long long fib_sequence(long long k)
         bigNum_init(&fib[i], 0);
         bigNum_add(&fib[i - 1], &fib[i - 2], &fib[i]);
     }
-    bigNum_to_dec(&fib[k]);
-    return 0;
+    char *ret = bigNum_to_dec(&fib[k]);
+    size_t retSize = strlen(ret);
+    __copy_to_user(buf, ret, retSize);
+    return retSize;
 }
 
-// static bigNum_t fib_helper(uint64_t n, bigNum_t *fib)
-// {
-//     if (!n) {
-//         bigNum_init(&fib[n], 0);
-//         return fib[n];
-//     } else if (n <= 2) {
-//         bigNum_init(&fib[n], 1);
-//         return fib[n];
-//     } else if (fib[n].digits) {
-//         return fib[n];
-//     }
-//     bigNum_t *c = kmalloc(2 * sizeof(bigNum_t), GFP_KERNEL);
-//     bigNum_init(&fib[n], 0);
-//     bigNum_init(&c[0], 0);
-//     bigNum_init(&c[1], 0);
-//     uint64_t k = n / 2;
-//     bigNum_t a = fib_helper(k, fib);
-//     bigNum_t b = fib_helper(k + 1, fib);
-//     if (n % 2) {
-//         bigNum_mul(&a, &a, &c[0]);
-//         bigNum_mul(&b, &b, &c[1]);
-//         bigNum_add(&c[0], &c[1], &fib[n]);
-//     } else {
-//         bigNum_mul_lshift(&b, &c[0]);
-//         bigNum_substract(&c[0], &a, &c[1]);
-//         bigNum_mul(&a, &c[1], &fib[n]);
-//     }
-//     return fib[n];
-// }
+static bigNum_t fib_helper(uint64_t n, bigNum_t *fib)
+{
+    if (!n) {
+        bigNum_init(&fib[n], 0);
+        return fib[n];
+    } else if (n <= 2) {
+        bigNum_init(&fib[n], 1);
+        return fib[n];
+    } else if (fib[n].digits) {
+        return fib[n];
+    }
+    bigNum_t *c = kmalloc(2 * sizeof(bigNum_t), GFP_KERNEL);
+    bigNum_init(&fib[n], 0);
+    bigNum_init(&c[0], 0);
+    bigNum_init(&c[1], 0);
+    uint64_t k = n / 2;
+    bigNum_t a = fib_helper(k, fib);
+    bigNum_t b = fib_helper(k + 1, fib);
+    if (n % 2) {
+        bigNum_mul(&a, &a, &c[0]);
+        bigNum_mul(&b, &b, &c[1]);
+        bigNum_add(&c[0], &c[1], &fib[n]);
+    } else {
+        bigNum_lshift(&b, &c[0]);
+        bigNum_substract(&c[0], &a, &c[1]);
+        bigNum_mul(&a, &c[1], &fib[n]);
+    }
+    return fib[n];
+}
 
-// static void fib_sequence_fast_doubling_recursive(long long k)
-// {
-//     bigNum_t *fib = kmalloc((k + 2) * sizeof(bigNum_t), GFP_KERNEL);
-//     fib_helper(k, fib);
-//     bigNum_to_dec(&fib[k]);
-// }
+static long long fib_sequence_fast_doubling_recursive(long long k, char *buf)
+{
+    bigNum_t *fib = kmalloc((k + 2) * sizeof(bigNum_t), GFP_KERNEL);
+    fib_helper(k, fib);
+    char *ret = bigNum_to_dec(&fib[k]);
+    size_t retSize = strlen(ret);
+    __copy_to_user(buf, ret, retSize);
+    return retSize;
+}
 
-// static long long fib_sequence_fast_doubling_iterative(long long k)
-// {
-//     uint8_t bits = 0;
-//     for (uint32_t i = k; i; ++bits, i >>= 1)
-//         ;
+static long long fib_sequence_fast_doubling_iterative(long long k, char *buf)
+{
+    uint8_t bits = 0;
+    for (uint32_t i = k; i; ++bits, i >>= 1)
+        ;
 
-//     bigNum_t *res = kmalloc(3 * sizeof(bigNum_t), GFP_KERNEL);
-//     bigNum_init(&res[0], 0);
-//     bigNum_init(&res[1], 1);
-//     bigNum_init(&res[2], 0);
-//     for (uint32_t mask = 1 << (bits - 1); mask; mask >>= 1) {
-//         bigNum_t *tmp = kmalloc(6 * sizeof(bigNum_t), GFP_KERNEL);
-//         bigNum_init(&tmp[0], 0);
-//         bigNum_init(&tmp[1], 0);
-//         bigNum_init(&tmp[2], 0);
-//         bigNum_init(&tmp[3], 0);
-//         bigNum_init(&tmp[4], 0);
-//         bigNum_init(&tmp[5], 0);
-//         bigNum_mul(&res[0], &res[0], &tmp[0]);
-//         bigNum_mul(&res[1], &res[1], &tmp[1]);
-//         bigNum_add(&tmp[0], &tmp[1], &tmp[5]);
-//         bigNum_mul_lshift(&res[1], &tmp[2]);
-//         bigNum_substract(&tmp[2], &res[0], &tmp[3]);
-//         bigNum_mul(&res[0], &tmp[3], &tmp[4]);
-//         if (mask & k) {
-//             bigNum_add(&tmp[5], &res[2], &res[0]);
-//             bigNum_add(&tmp[4], &tmp[5], &res[1]);
-//         } else {
-//             bigNum_add(&tmp[4], &res[2], &res[0]);
-//             bigNum_add(&tmp[5], &res[2], &res[1]);
-//         }
-//         free(tmp);
-//     }
-//     bigNum_to_dec(&res[0]);
-// }
+    bigNum_t *res = kmalloc(3 * sizeof(bigNum_t), GFP_KERNEL);
+    bigNum_t *tmp = kmalloc(6 * sizeof(bigNum_t), GFP_KERNEL);
+    bigNum_init(&res[0], 0);
+    bigNum_init(&res[1], 1);
+    bigNum_init(&res[2], 0);
+    bigNum_init(&tmp[0], 0);
+    bigNum_init(&tmp[1], 0);
+    bigNum_init(&tmp[2], 0);
+    bigNum_init(&tmp[3], 0);
+    bigNum_init(&tmp[4], 0);
+    bigNum_init(&tmp[5], 0);
+    for (uint32_t mask = 1 << (bits - 1); mask; mask >>= 1) {
+        bigNum_mul(&res[0], &res[0], &tmp[0]);
+        bigNum_mul(&res[1], &res[1], &tmp[1]);
+        bigNum_add(&tmp[0], &tmp[1], &tmp[5]);
+        bigNum_lshift(&res[1], &tmp[2]);
+        bigNum_substract(&tmp[2], &res[0], &tmp[3]);
+        bigNum_mul(&res[0], &tmp[3], &tmp[4]);
+        if (mask & k) {
+            bigNum_add(&tmp[5], &res[2], &res[0]);
+            bigNum_add(&tmp[4], &tmp[5], &res[1]);
+        } else {
+            bigNum_add(&tmp[4], &res[2], &res[0]);
+            bigNum_add(&tmp[5], &res[2], &res[1]);
+        }
+        bigNum_clean(&tmp[0]);
+        bigNum_clean(&tmp[1]);
+        bigNum_clean(&tmp[2]);
+        bigNum_clean(&tmp[3]);
+        bigNum_clean(&tmp[4]);
+        bigNum_clean(&tmp[5]);
+    }
+    char *ret = bigNum_to_dec(&res[0]);
+    size_t retSize = strlen(ret);
+    __copy_to_user(buf, ret, retSize);
+    return retSize;
+}
+
+static long long fib_sequence_fast_doubling_iterative_clz(long long k,
+                                                          char *buf)
+{
+    uint8_t h = 63 - __builtin_clzll(k);
+
+    bigNum_t *res = kmalloc(3 * sizeof(bigNum_t), GFP_KERNEL);
+    bigNum_t *tmp = kmalloc(6 * sizeof(bigNum_t), GFP_KERNEL);
+    bigNum_init(&res[0], 0);
+    bigNum_init(&res[1], 1);
+    bigNum_init(&res[2], 0);
+    bigNum_init(&tmp[0], 0);
+    bigNum_init(&tmp[1], 0);
+    bigNum_init(&tmp[2], 0);
+    bigNum_init(&tmp[3], 0);
+    bigNum_init(&tmp[4], 0);
+    bigNum_init(&tmp[5], 0);
+    for (uint32_t mask = 1 << h; mask; mask >>= 1) {
+        bigNum_mul(&res[0], &res[0], &tmp[0]);
+        bigNum_mul(&res[1], &res[1], &tmp[1]);
+        bigNum_add(&tmp[0], &tmp[1], &tmp[5]);
+        bigNum_lshift(&res[1], &tmp[2]);
+        bigNum_substract(&tmp[2], &res[0], &tmp[3]);
+        bigNum_mul(&res[0], &tmp[3], &tmp[4]);
+        if (mask & k) {
+            bigNum_add(&tmp[5], &res[2], &res[0]);
+            bigNum_add(&tmp[4], &tmp[5], &res[1]);
+        } else {
+            bigNum_add(&tmp[4], &res[2], &res[0]);
+            bigNum_add(&tmp[5], &res[2], &res[1]);
+        }
+        bigNum_clean(&tmp[0]);
+        bigNum_clean(&tmp[1]);
+        bigNum_clean(&tmp[2]);
+        bigNum_clean(&tmp[3]);
+        bigNum_clean(&tmp[4]);
+        bigNum_clean(&tmp[5]);
+    }
+    char *ret = bigNum_to_dec(&res[0]);
+    size_t retSize = strlen(ret);
+    __copy_to_user(buf, ret, retSize);
+    return retSize;
+}
 
 static int fib_open(struct inode *inode, struct file *file)
 {
@@ -153,12 +210,28 @@ static int fib_release(struct inode *inode, struct file *file)
     return 0;
 }
 
-static long long fib_time_proxy(long long k, char *buf)
+static long long fib_time_proxy(long long k, char *buf, int flag)
 {
+    long long result = 0;
     kt = ktime_get();
-    long long result = fib_sequence(k);
+    switch (flag) {
+    case 0:
+        result = fib_sequence(k, buf);
+        break;
+    case 1:
+        result = fib_sequence_fast_doubling_recursive(k, buf);
+        break;
+    case 2:
+        result = fib_sequence_fast_doubling_iterative(k, buf);
+        break;
+    case 3:
+        result = fib_sequence_fast_doubling_iterative_clz(k, buf);
+        break;
+    case 4:
+        result = fib_sequence_string(k, buf);
+        break;
+    }
     kt = ktime_sub(ktime_get(), kt);
-
     return result;
 }
 
@@ -168,7 +241,7 @@ static ssize_t fib_read(struct file *file,
                         size_t size,
                         loff_t *offset)
 {
-    return (ssize_t) fib_time_proxy(*offset, buf);
+    return (ssize_t) fib_time_proxy(*offset, buf, 1);
 }
 
 /* write operation is skipped */
