@@ -20,29 +20,34 @@ void bigNum_init(bigNum_t *n, uint32_t num)
 char *bigNum_to_dec(bigNum_t *n)
 {
     // log10(x) = log2(x) / log2(10) ~= log2(x) / 3.322
-    size_t len = (8 * sizeof(int) * n->len) / 3 + 2;
-    char *s = kmalloc(len, GFP_KERNEL);
+    size_t len =
+        (8 * sizeof(int) * n->len - __builtin_clz(n->digits[n->len - 1])) /
+            3.322 +
+        2;
+
+    char *s = malloc(len);
     char *p = s;
 
     memset(s, '0', len - 1);
     s[len - 1] = '\0';
 
     for (int i = n->len - 1; i >= 0; i--) {
-        for (unsigned int d = 1U << 31; d; d >>= 1) {
+        for (unsigned int d = 0x80000000; d; d >>= 1) {
             /* binary -> decimal string */
             int carry = !!(d & n->digits[i]);
             for (int j = len - 2; j >= 0; j--) {
-                s[j] += s[j] - '0' + carry;  // double it
-                carry = (s[j] > '9');
-                if (carry)
-                    s[j] -= 10;
+                int tmp = 2 * (s[j] - '0') + carry;  // double it
+                s[j] = "0123456789"[tmp % 10];
+                carry = tmp / 10;
+                if (!s[j] && !carry)
+                    break;
             }
         }
     }
-    // skip leading zero
-    while (p[0] == '0' && p[1] != '\0') {
+
+    if (p[0] == '0' && p[1] != '\0')
         p++;
-    }
+
     memmove(s, p, strlen(p) + 1);
     return s;
 }
