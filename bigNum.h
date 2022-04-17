@@ -7,14 +7,6 @@ typedef struct bigNum {
     uint32_t *digits;
 } bigNum_t;
 
-// void bigNum_init(bigNum_t *n, int32_t num);
-// void bigNum_to_dec(bigNum_t *n);
-// void bigNum_add(bigNum_t *a, bigNum_t *b, bigNum_t *c);
-// void bigNum_substract(bigNum_t *a, bigNum_t *b, bigNum_t *c);
-// void bigNum_mul(bigNum_t *a, bigNum_t *b, bigNum_t *c);
-// // void bigNum_rshift(bigNum_t *a);
-// void bigNum_mul_lshift(bigNum_t *a, bigNum_t *b);
-// #include "bigNum.h"
 
 
 void bigNum_init(bigNum_t *n, int num)
