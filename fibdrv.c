@@ -62,10 +62,10 @@ static long long fib_sequence(long long k, char *buf)
         bigNum_init(&fib[i], 0);
         bigNum_add(&fib[i - 1], &fib[i - 2], &fib[i]);
     }
-    char *ret = bigNum_to_dec(&fib[k]);
-    size_t retSize = strlen(ret);
-    __copy_to_user(buf, ret, retSize);
-    return retSize;
+
+    __copy_to_user(buf, &fib[k], sizeof(bigNum_t));
+    __copy_to_user(buf + 4, fib[k].digits, fib[k].len * sizeof(int));
+    return 0;
 }
 
 static bigNum_t fib_helper(uint64_t n, bigNum_t *fib, bigNum_t *c)
@@ -217,7 +217,7 @@ static ssize_t fib_read(struct file *file,
                         size_t size,
                         loff_t *offset)
 {
-    return (ssize_t) fib_time_proxy(*offset, buf, 4);
+    return (ssize_t) fib_time_proxy(*offset, buf, 0);
 }
 
 /* write operation is skipped */

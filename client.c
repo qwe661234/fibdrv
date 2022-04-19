@@ -1,4 +1,5 @@
 #include <fcntl.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -15,11 +16,52 @@ static inline long long get_nanotime()
     return ts.tv_sec * 1e9 + ts.tv_nsec;
 }
 
+typedef struct bigNum {
+    uint8_t len;
+    uint32_t digits[];
+} bigNum_t;
+
+char *bigNum_to_dec(bigNum_t *n)
+{
+    // log10(x) = log2(x) / log2(10) ~= log2(x) / 3.322
+    size_t len =
+        (8 * sizeof(int) * n->len - __builtin_clz(n->digits[n->len - 1])) /
+            3.322 +
+        2;
+
+    char *s = malloc(len);
+    char *p = s;
+
+    memset(s, '0', len - 1);
+    s[len - 1] = '\0';
+
+    for (int i = n->len - 1; i >= 0; i--) {
+        for (unsigned int d = 0x80000000; d; d >>= 1) {
+            /* binary -> decimal string */
+            int carry = !!(d & n->digits[i]);
+            for (int j = len - 2; j >= 0; j--) {
+                int tmp = 2 * (s[j] - '0') + carry;  // double it
+                s[j] = "0123456789"[tmp % 10];
+                carry = tmp / 10;
+                if (!s[j] && !carry)
+                    break;
+            }
+        }
+    }
+
+    if (p[0] == '0' && p[1] != '\0')
+        p++;
+
+    memmove(s, p, strlen(p) + 1);
+    return s;
+}
+
 int main()
 {
-    char read_buf[] = "";
-    char write_buf[] = "testing writing";
-    int offset = 92; /* TODO: try test something bigger than the limit */
+    bigNum_t *read_buf = malloc(sizeof(bigNum_t) + 100 * sizeof(int));
+    // char read_buf[100] = "";
+    char write_buf[] = "";
+    int offset = 100; /* TODO: try test something bigger than the limit */
 
     int fd = open(FIB_DEV, O_RDWR);
     FILE *data = fopen("data.txt", "w");
@@ -29,19 +71,19 @@ int main()
         exit(1);
     }
 
-    write(fd, write_buf, strlen(write_buf));
+    write(fd, write_buf, 0);
     for (int i = 0; i <= offset; i++) {
         lseek(fd, i, SEEK_SET);
         long long start = get_nanotime();
         long long sz = read(fd, read_buf, 1);
-        read_buf[sz] = '\0';
         long long utime = get_nanotime() - start;
-        long long ktime = write(fd, write_buf, strlen(write_buf));
+        long long ktime = write(fd, write_buf, 0);
         fprintf(data, "%d %lld %lld %lld\n", i, ktime, utime, utime - ktime);
         printf("Reading from " FIB_DEV
                " at offset %d, returned the sequence "
-               "%s.\n",
-               i, read_buf);
+               "%d.\n",
+               i, read_buf->len);
+        printf("digits = %s\n", bigNum_to_dec(read_buf));
         printf("Writing to " FIB_DEV ", returned the sequence %lld\n", ktime);
     }
 
