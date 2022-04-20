@@ -59,7 +59,7 @@ static long long fib_sequence(long long k, char *buf)
     bigNum_init(&fib[0], 0);
     bigNum_init(&fib[1], 1);
     for (int i = 2; i <= k; i++) {
-        bigNum_init(&fib[i], 0);
+        // bigNum_init(&fib[i], 0);
         bigNum_add(&fib[i - 1], &fib[i - 2], &fib[i]);
     }
 

@@ -20,12 +20,14 @@ void bigNum_init(bigNum_t *n, uint32_t num)
 char *bigNum_to_dec(bigNum_t *n)
 {
     // log10(x) = log2(x) / log2(10) ~= log2(x) / 3.322
+
     size_t len =
-        (8 * sizeof(int) * n->len - __builtin_clz(n->digits[n->len - 1])) /
-            3.322 +
+        (8 * sizeof(int) * n->len -
+         __builtin_clz(n->digits[n->len - 1] ? n->digits[n->len - 1] : 1)) /
+            3 +
         2;
 
-    char *s = malloc(len);
+    char *s = kmalloc(len, GFP_KERNEL);
     char *p = s;
 
     memset(s, '0', len - 1);
@@ -45,7 +47,7 @@ char *bigNum_to_dec(bigNum_t *n)
         }
     }
 
-    if (p[0] == '0' && p[1] != '\0')
+    while (p[0] == '0' && p[1] != '\0')
         p++;
 
     memmove(s, p, strlen(p) + 1);
@@ -97,8 +99,8 @@ void bigNum_mul(bigNum_t *a, bigNum_t *b, bigNum_t *c)
         kfree(c->digits);
     uint64_t carry = 0, sum, tmp;
     int num = (a->len << 5) + (b->len << 5) -
-              __builtin_clz(a->digits[a->len - 1]) -
-              __builtin_clz(b->digits[b->len - 1]);
+              __builtin_clz(a->digits[a->len - 1] ? a->digits[a->len - 1] : 1) -
+              __builtin_clz(b->digits[a->len - 1] ? b->digits[a->len - 1] : 1);
     num = !!(num & 31) + (num >> 5);
     c->digits = kmalloc(num * sizeof(int), GFP_KERNEL);
     c->len = num;
