@@ -5,7 +5,6 @@
 #include <string.h>
 #include <sys/types.h>
 #include <time.h>
-#include <unistd.h>
 
 #define FIB_DEV "/dev/fibonacci"
 
@@ -16,18 +15,13 @@ static inline long long get_nanotime()
     return ts.tv_sec * 1e9 + ts.tv_nsec;
 }
 
-typedef struct bigNum {
-    uint8_t len;
-    uint32_t digits[];
-} bigNum_t;
-
-char *bigNum_to_dec(bigNum_t *n)
+char *bigNum_to_dec(unsigned int *digits, int length)
 {
     // log10(x) = log2(x) / log2(10) ~= log2(x) / 3.322
-    size_t len =
-        (8 * sizeof(int) * n->len - __builtin_clz(n->digits[n->len - 1])) /
-            3.322 +
-        2;
+    size_t len = (8 * sizeof(int) * length -
+                  __builtin_clz(digits[length - 1] ? digits[length - 1] : 1)) /
+                     3.322 +
+                 2;
 
     char *s = malloc(len);
     char *p = s;
@@ -35,10 +29,10 @@ char *bigNum_to_dec(bigNum_t *n)
     memset(s, '0', len - 1);
     s[len - 1] = '\0';
 
-    for (int i = n->len - 1; i >= 0; i--) {
+    for (int i = length - 1; i >= 0; i--) {
         for (unsigned int d = 0x80000000; d; d >>= 1) {
             /* binary -> decimal string */
-            int carry = !!(d & n->digits[i]);
+            int carry = !!(d & digits[i]);
             for (int j = len - 2; j >= 0; j--) {
                 int tmp = 2 * (s[j] - '0') + carry;  // double it
                 s[j] = "0123456789"[tmp % 10];
@@ -58,7 +52,7 @@ char *bigNum_to_dec(bigNum_t *n)
 
 int main()
 {
-    bigNum_t *read_buf = malloc(sizeof(bigNum_t) + 100 * sizeof(int));
+    unsigned int *read_buf = malloc(50 * sizeof(int));
     // char read_buf[100] = "";
     char write_buf[] = "";
     int offset = 100; /* TODO: try test something bigger than the limit */
@@ -75,15 +69,15 @@ int main()
     for (int i = 0; i <= offset; i++) {
         lseek(fd, i, SEEK_SET);
         long long start = get_nanotime();
-        long long sz = read(fd, read_buf, 1);
+        int length = read(fd, read_buf, 1);
         long long utime = get_nanotime() - start;
         long long ktime = write(fd, write_buf, 0);
         fprintf(data, "%d %lld %lld %lld\n", i, ktime, utime, utime - ktime);
         printf("Reading from " FIB_DEV
                " at offset %d, returned the sequence "
                "%d.\n",
-               i, read_buf->len);
-        printf("digits = %s\n", bigNum_to_dec(read_buf));
+               i, length);
+        printf("digits = %s\n", bigNum_to_dec(read_buf, sz));
         printf("Writing to " FIB_DEV ", returned the sequence %lld\n", ktime);
     }
 

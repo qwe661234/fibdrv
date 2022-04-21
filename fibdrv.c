@@ -63,9 +63,8 @@ static long long fib_sequence(long long k, char *buf)
         bigNum_add(&fib[i - 1], &fib[i - 2], &fib[i]);
     }
 
-    __copy_to_user(buf, &fib[k], sizeof(bigNum_t));
-    __copy_to_user(buf + 4, fib[k].digits, fib[k].len * sizeof(int));
-    return 0;
+    __copy_to_user(buf, fib[k].digits, fib[k].len * sizeof(int));
+    return fib[k].len;
 }
 
 static bigNum_t fib_helper(uint64_t n, bigNum_t *fib, bigNum_t *c)
