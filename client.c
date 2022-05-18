@@ -1,4 +1,5 @@
 #include <fcntl.h>
+#include <pthread.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -7,13 +8,10 @@
 #include <time.h>
 
 #define FIB_DEV "/dev/fibonacci"
+#define THREAD_COUNT 100
 
-static inline long long get_nanotime()
-{
-    struct timespec ts;
-    clock_gettime(CLOCK_REALTIME, &ts);
-    return ts.tv_sec * 1e9 + ts.tv_nsec;
-}
+int count = 0;
+pthread_mutex_t fib_lock;
 
 char *bigNum_to_dec(unsigned int *digits, int length)
 {
@@ -50,15 +48,14 @@ char *bigNum_to_dec(unsigned int *digits, int length)
     return s;
 }
 
-int main()
+// close the complier warning of unused parameter
+void thread_func(int x __attribute_used__)
 {
     unsigned int *read_buf = malloc(50 * sizeof(int));
-    // char read_buf[100] = "";
     char write_buf[] = "";
-    int offset = 100; /* TODO: try test something bigger than the limit */
+    int offset = 500; /* TODO: try test something bigger than the limit */
 
     int fd = open(FIB_DEV, O_RDWR);
-    FILE *data = fopen("data.txt", "w");
 
     if (fd < 0) {
         perror("Failed to open character device");
@@ -66,22 +63,30 @@ int main()
     }
 
     write(fd, write_buf, 0);
-    for (int i = 0; i <= offset; i++) {
-        lseek(fd, i, SEEK_SET);
-        long long start = get_nanotime();
+    while (1) {
+        pthread_mutex_lock(&fib_lock);
+        ++count;
+        if (count > 500)
+            break;
+        lseek(fd, count, SEEK_SET);
         int length = read(fd, read_buf, 1);
-        long long utime = get_nanotime() - start;
-        long long ktime = write(fd, write_buf, 0);
-        fprintf(data, "%d %lld %lld %lld\n", i, ktime, utime, utime - ktime);
-        printf("Reading from " FIB_DEV
-               " at offset %d, returned the sequence "
-               "%d.\n",
-               i, length);
-        printf("digits = %s\n", bigNum_to_dec(read_buf, sz));
-        printf("Writing to " FIB_DEV ", returned the sequence %lld\n", ktime);
+        printf("digits = %s\n", bigNum_to_dec(read_buf, length));
+        pthread_mutex_unlock(&fib_lock);
+    }
+    pthread_mutex_unlock(&fib_lock);
+    close(fd);
+}
+
+int main()
+{
+    pthread_t pt[THREAD_COUNT];
+    for (int i = 0; i < THREAD_COUNT; i++) {
+        pthread_create(&pt[i], NULL, thread_func, NULL);
     }
 
-    close(fd);
-    fclose(data);
+    for (int i = 0; i < THREAD_COUNT; i++) {
+        pthread_join(pt[i], NULL);
+    }
+
     return 0;
 }

@@ -25,7 +25,7 @@ MODULE_VERSION("0.1");
 /* MAX_LENGTH is set to 92 because
  * ssize_t can't fit the number > 92
  */
-#define MAX_LENGTH 92
+#define MAX_LENGTH 500
 
 static dev_t fib_dev = 0;
 static struct cdev *fib_cdev;
@@ -264,7 +264,7 @@ static int __init init_fib_dev(void)
 {
     int rc = 0;
 
-    mutex_init(&fib_mutex);
+    // mutex_init(&fib_mutex);
 
     // Let's register the device
     // This will dynamically allocate the major number
